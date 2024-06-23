@@ -1,18 +1,25 @@
 import re
-from typing import Tuple
+from typing import List, Tuple, Dict
 
-def parse_response(response: str) -> Tuple[str, str, str]:
-    patterns = {
-        "bash": r"```bash\n(.*?)```",
-        "modify": r"```modify\n(.*?)\n---\n(.*?)```",
-        "analyze": r"```analyze\n(.*?)```"
-    }
+def parse_response(response: str) -> List[Tuple[str, Dict[str, str]]]:
+    pattern = r'\[(\w+)\](.*?)\[/\1\]'
+    matches = re.findall(pattern, response, re.DOTALL)
+    
+    parsed_actions = []
 
-    for action, pattern in patterns.items():
-        match = re.search(pattern, response, re.DOTALL)
-        if match:
-            if action == "modify":
-                return action, match.group(1), match.group(2)
-            else:
-                return action, match.group(1), ""
-    return "none", "", ""
+    for action_type, content in matches:
+        action_type = action_type.lower()
+        
+        if action_type == 'modify':
+            file_pattern = r'FILE: (.*?)\n---\n(.*)'
+            file_match = re.search(file_pattern, content, re.DOTALL)
+            if file_match:
+                file_path, file_content = file_match.groups()
+                parsed_actions.append((action_type, {
+                    'file_path': file_path.strip(),
+                    'content': file_content.strip()
+                }))
+        else:
+            parsed_actions.append((action_type, {'content': content.strip()}))
+
+    return parsed_actions if parsed_actions else [("none", {})]

@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.12"
 anthropic = "^0.29.0"
 gitpython = "^3.1.43"
+loguru = "^0.7.2"
+prompt-toolkit = "^3.0.47"
 
 
 [build-system]
@@ -17,4 +19,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
 venvPath = "."
-venv = "/Users/caiocastilho/Library/Caches/pypoetry/virtualenvs/ai-luEaHPVh-py3.12"
+venv = "/home/caio/.cache/pypoetry/virtualenvs/ai-2g66xYS9-py3.12"

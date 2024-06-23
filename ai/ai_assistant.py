@@ -2,54 +2,88 @@ import anthropic
 import os
 import git
 import sys
-from typing import List
+import json
+import subprocess
+from typing import List, Dict, Tuple
+from loguru import logger
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
+from prompt_toolkit.formatted_text import HTML
+
 from utils import run_bash_command, modify_file, create_branch_and_commit, run_main_file
 from parser import parse_response
-
-INITIAL_PROMPT = """
-You are an AI assistant specialized in code analysis, modification, and optimization. Your tasks include:
-
-1. Analyzing Python code and suggesting improvements
-2. Running bash commands and interpreting their output
-3. Modifying files and committing changes to Git repositories
-4. Running and testing Python scripts
-
-When responding, use the following prefixes for specific actions:
-- "bash:" to execute a bash command
-- "modify:" to modify a file, followed by the file path and new content
-- "analyze:" to provide code analysis and suggestions
-
-use the following patterns,
-"bash": r"```bash\n(.*?)```",
-"modify": r"```modify\n(.*?)\n---\n(.*?)```",
-"analyze": r"```analyze\n(.*?)```"
-
-You can make only one action at a time, and should not spend many tokens when writing only codes to run actions. Write only the essential.
-
-Rules and limitations:
-1. You can only run commands on files that already exist.
-2. All file operations must be within the current working directory or its subdirectories.
-3. You cannot create new files, only modify existing ones.
-4. Bash commands are limited to: ls, cat, grep, head, tail, wc, diff, find, sort, uniq
-5. You cannot use sudo or execute potentially harmful commands.
-6. When modifying files, you can only change the content, not rename or move them.
-
-Always provide clear explanations for your actions and recommendations.
-
-The user may request either a command-only response or a detailed explanation. Adjust your response accordingly.
-"""
+from config import INITIAL_PROMPT
 
 class AIAssistant:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=os.getenv("API_KEY"))
+        self.current_directory = os.getcwd()
         self.conversation_history: List[dict] = []
+        self.history_file = ".history"
+        self.load_history()
+        
+        # Remove qualquer handler padrão
+        logger.remove()
 
-    def process_user_input(self, user_input: str, command_only: bool) -> str:
+        # Adiciona o novo handler com o formato desejado
+        logger.add(
+            sys.stderr,
+            format="<level>{level: <8}</level> | {message}",
+            colorize=True
+        )
+
+        # Set up prompt session
+        self.session = PromptSession()
+        self.style = Style.from_dict({
+            'username': '#ansiyellow',
+            'at': '#ansiblue',
+            'colon': '#ansiblue',
+            'pound': '#ansigreen',
+            'host': '#ansicyan',
+            'path': '#ansimagenta',
+        })
+
+    def load_history(self):
+        if os.path.exists(self.history_file):
+            with open(self.history_file, "r") as f:
+                self.conversation_history = json.load(f)
+        logger.info("Conversation history loaded")
+
+    def save_history(self):
+        with open(self.history_file, "w") as f:
+            json.dump(self.conversation_history, f)
+        logger.info("Conversation history saved")
+
+    def get_prompt(self):
+        username = os.getenv("USER", "user")
+        hostname = os.uname().nodename
+        return HTML(
+            f'<username>{username}</username>'
+            f'<at>@</at>'
+            f'<host>{hostname}</host>'
+            f'<colon>:</colon>'
+            f'<path>{self.current_directory}</path>'
+            f'<pound>$</pound> '
+        )
+
+    def process_user_input(self, user_input: str) -> str:
+        if user_input.startswith('cd '):
+            new_dir = user_input[3:].strip()
+            try:
+                os.chdir(os.path.expanduser(new_dir))
+                self.current_directory = os.getcwd()
+                return f"Changed directory to: {self.current_directory}"
+            except FileNotFoundError:
+                return f"Directory not found: {new_dir}"
+            except PermissionError:
+                return f"Permission denied: {new_dir}"
+        
         self.conversation_history.append({
             "role": "user",
             "content": [{"type": "text", "text": user_input}]
         })
 
+        results = []
         response = self.client.messages.create(
             model="claude-3-sonnet-20240229",
             temperature=0,
@@ -57,53 +91,98 @@ class AIAssistant:
             max_tokens=1024,
             messages=self.conversation_history
         )
-        print(response)
-        action, param1, param2 = parse_response(response.content[0].text)
-        result = ""
+        
+        parsed_actions = parse_response(response.content[0].text)
+        aditional_info = ''
 
-        try:
-            if action == "bash":
-                result = run_bash_command(param1)
-            elif action == "modify":
-                modify_file(param1, param2)
-                result = f"File {param1} has been modified."
+        for action, details in parsed_actions:
+            if action == "getting_info":
+                info_commands = details['content'].strip().split('\n')
+                info_results = []
+                for info_command in info_commands:
+                    logger.info(f"Getting additional info: {info_command}")
+                    info_result = run_bash_command(info_command)
+                    info_results.append(f"Command: {info_command}\nResult: {info_result}")
+                
+                results.extend(info_results)
+                aditional_info = "Additional info:\n" + "\n".join(info_results) + "\n generated by code"
 
-                repo_path = os.path.dirname(param1)
-                branch_name = f"claude_modification_{os.path.basename(param1)}"
-                create_branch_and_commit(repo_path, branch_name, param1, "Claude's modification")
-                result += f"\nChanges committed to new branch: {branch_name}"
-
-                main_file = input("Enter the path to the main file to test: ")
-                test_result = run_main_file(main_file)
-                result += f"\nTest result:\n{test_result}"
-            elif action == "analyze":
-                result = f"Analysis:\n{param1}"
-        except Exception as e:
-            result = f"An error occurred: {str(e)}"
-
-        if command_only:
-            return result
-
-        self.conversation_history[-1]["content"][0]["text"] += f"\n\nCommand output:\n{result}"
-
-        final_response = self.client.messages.create(
-            model="claude-3-sonnet-20240229",
-            temperature=0,
-            system=INITIAL_PROMPT,
-            max_tokens=1024,
-            messages=self.conversation_history
-        )
+            elif action in ["bash", "modify", "analyze", "info"]:
+                result = self.execute_single_action(action, details)
+                results.append(result)
 
         self.conversation_history.append({
             "role": "assistant",
-            "content": [{"type": "text", "text": final_response.content[0].text}]
+            "content": [{"type": "text", "text": response.content[0].text + f"\n{aditional_info}"}]
         })
 
-        return final_response.content[0].text
+        self.save_history()
+        return "\n\n".join(results)
+
+    def execute_single_action(self, action: str, details: Dict[str, str]) -> str:
+        try:
+            if action == "bash":
+                command = details['content'].strip()
+                logger.info(f"Executing bash command: {command}")
+                result = run_bash_command(command)
+                print(result)
+                return result
+            elif action == "modify":
+                file_path = details['file_path']
+                content = details['content']
+                logger.info(f"Modifying file: {file_path}")
+                modify_file(file_path, content)
+                print(f"\nModified file: {file_path}")
+                
+                repo_path = os.path.dirname(file_path)
+                branch_name = f"claude_modification_{os.path.basename(file_path)}"
+                create_branch_and_commit(repo_path, branch_name, file_path, "Claude's modification")
+                print(f"Changes committed to new branch: {branch_name}")
+                
+                main_file = self.session.prompt("Enter the path to the main file to test: ")
+                test_result = run_main_file(main_file)
+                print(f"Test result:\n{test_result}")
+                return test_result
+            elif action == "analyze":
+                analysis = details['content']
+                logger.info("Providing code analysis")
+                print(f"\nAnalysis:\n{analysis}")
+                return analysis
+            elif action == "info":
+                info = details['content']
+                logger.info("Providing information")
+                print(f"\nInformation:\n{info}")
+                return info
+        except Exception as e:
+            error_msg = f"An error occurred during {action}: {str(e)}"
+            logger.error(error_msg)
+            print(f"\n{error_msg}")
+            return error_msg
+
+def main():
+    assistant = AIAssistant()
+    logger.info("AI Assistant initialized")
+
+    print("Welcome to the AI Assistant. Type 'exit' to quit, 'ai' to interact with the AI, or any bash command to execute directly.")
+
+    while True:
+        user_input = assistant.session.prompt(assistant.get_prompt(), style=assistant.style).strip()
+
+        if user_input.lower() in ['exit', 'quit', 'bye', 'q']:
+            logger.info("Exiting AI Assistant")
+            break
+
+        if user_input.startswith('cd '):
+            result = assistant.process_user_input(user_input)
+            print(result)
+        else:
+            try:
+                result = subprocess.run(user_input, shell=True, check=True, text=True, capture_output=True)
+                print(result.stdout)
+                if result.stderr:
+                    print("Errors:", result.stderr)
+            except subprocess.CalledProcessError as e:
+                response = assistant.process_user_input(user_input)
 
 if __name__ == "__main__":
-    assistant = AIAssistant()
-    command_only = sys.argv[1] == "@"
-    user_input = " ".join(sys.argv[2:] if command_only else sys.argv[1:])
-    response = assistant.process_user_input(user_input, command_only)
-    print(response)
+    main()
