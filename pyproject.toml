@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "ai"
+version = "0.1.0"
+description = ""
+authors = ["Caio Wingeter <castilhocaio1164@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+anthropic = "^0.29.0"
+gitpython = "^3.1.43"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pyright]
+venvPath = "."
+venv = "/Users/caiocastilho/Library/Caches/pypoetry/virtualenvs/ai-luEaHPVh-py3.12"
