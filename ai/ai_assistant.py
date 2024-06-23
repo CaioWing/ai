@@ -15,11 +15,12 @@ from parser import parse_response
 from config import INITIAL_PROMPT
 
 class AIAssistant:
-    def __init__(self):
+    def __init__(self, model_id : str):
         self.client = anthropic.Anthropic(api_key=os.getenv("API_KEY"))
         self.current_directory = os.getcwd()
         self.conversation_history: List[dict] = []
         self.history_file = ".history"
+        self.model_id = model_id
         self.load_history()
         
         # Remove qualquer handler padrão
@@ -85,16 +86,15 @@ class AIAssistant:
 
         results = []
         response = self.client.messages.create(
-            model="claude-3-sonnet-20240229",
+            model=self.model_id,
             temperature=0,
             system=INITIAL_PROMPT,
-            max_tokens=1024,
+            max_tokens=4000,
             messages=self.conversation_history
         )
         
         parsed_actions = parse_response(response.content[0].text)
         aditional_info = ''
-
         for action, details in parsed_actions:
             if action == "getting_info":
                 info_commands = details['content'].strip().split('\n')
@@ -134,15 +134,15 @@ class AIAssistant:
                 modify_file(file_path, content)
                 print(f"\nModified file: {file_path}")
                 
-                repo_path = os.path.dirname(file_path)
-                branch_name = f"claude_modification_{os.path.basename(file_path)}"
-                create_branch_and_commit(repo_path, branch_name, file_path, "Claude's modification")
-                print(f"Changes committed to new branch: {branch_name}")
+                # repo_path = os.path.dirname(file_path)
+                # branch_name = f"claude_modification_{os.path.basename(file_path)}"
+                # create_branch_and_commit(repo_path, branch_name, file_path, "Claude's modification")
+                # print(f"Changes committed to new branch: {branch_name}")
                 
-                main_file = self.session.prompt("Enter the path to the main file to test: ")
-                test_result = run_main_file(main_file)
-                print(f"Test result:\n{test_result}")
-                return test_result
+                # main_file = self.session.prompt("Enter the path to the main file to test: ")
+                # test_result = run_main_file(main_file)
+                # print(f"Test result:\n{test_result}")
+                return f'{file_path} modificado'
             elif action == "analyze":
                 analysis = details['content']
                 logger.info("Providing code analysis")
@@ -160,7 +160,17 @@ class AIAssistant:
             return error_msg
 
 def main():
-    assistant = AIAssistant()
+    models = { 
+        'claudeSonnet-3.5' : 'claude-3-5-sonnet-20240620',
+        'claudeOpus-3' : 'anthropic.claude-3-opus-20240229',
+        'claudeSonnet-3' : 'anthropic.claude-3-sonnet-20240229',
+        'claudeHaiku-3' : 'claude-3-haiku-20240307'
+    }
+
+    assistant = AIAssistant(
+        model_id=models["claudeHaiku-3"]
+        )
+    
     logger.info("AI Assistant initialized")
 
     print("Welcome to the AI Assistant. Type 'exit' to quit, 'ai' to interact with the AI, or any bash command to execute directly.")

@@ -22,13 +22,9 @@ This tool is an AI-powered assistant designed to help with code analysis, modifi
 
 - Interact with the AI assistant by providing input in the specified format:
 
-  - For code analysis or general information: `[ANALYZE]` or `[INFO]` followed by your request.
+  - For executing bash commands: <command>
   
-  - For modifying files: [MODIFY] FILE: <file_path> --- <new_content> [/MODIFY]   
-  
-  - For executing bash commands: [BASH] <command>
-  
-  - To request additional information before a final response: [GETTING_INFO] <command1> <command2> ...
+  - For use the model you'll need only write the message in the prompt
 
 - The AI assistant will process your input, perform the requested action, and provide a response.
 
