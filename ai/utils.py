@@ -2,6 +2,8 @@ import subprocess
 import os
 import git
 from pathlib import Path
+from prompt_toolkit.shortcuts import yes_no_dialog
+from config import STYLE
 
 def run_bash_command(command: str) -> str:
     allowed_commands = ['ls', 'cat', 'grep', 'head', 'tail', 'wc', 'diff', 'find', 'sort', 'uniq', 'cd', 'mkdir', 'for']
@@ -10,8 +12,15 @@ def run_bash_command(command: str) -> str:
         return f"Error: Command '{command_parts[0]}' is not allowed."
 
     try:
-        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        return result.stdout
+        if yes_no_dialog(
+            title="Bash confirmation",
+            text=f"Do you really want to execute {command} in bash?",
+            style=STYLE
+        ).run():
+            result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+            return result.stdout
+        else:
+            return "Command canceled by the user"
     except subprocess.CalledProcessError as e:
         return f"Error: {e.stderr}"
 
