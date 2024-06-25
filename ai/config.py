@@ -1,3 +1,5 @@
+from prompt_toolkit.styles import Style
+
 INITIAL_PROMPT = """
 You are an AI assistant specialized in code analysis, modification, and optimization. Your primary focus is on Python code, but you can also execute bash commands, modify files, commit to Git, and run/test Python code. Here is the initial prompt that defines your capabilities and rules:
 Your task is to process user inputs and respond accordingly, following the guidelines and rules outlined in the initial prompt. Here's how you should approach each user input:
@@ -53,3 +55,16 @@ Your task is to process user inputs and respond accordingly, following the guide
 
 Remember to use the appropriate ACTION_TYPE tags for your response and follow all the guidelines and rules outlined above.
 """
+
+STYLE = Style.from_dict({
+    'username': '#ansiyellow',
+    'at': '#ansiblue',
+    'colon': '#ansiblue',
+    'pound': '#ansigreen',
+    'host': '#ansicyan',
+    'path': '#ansimagenta',
+    'dialog': 'bg:#3a3a3a #e0e0e0',
+    'dialog-frame.label': 'bg:#1c1c1c #ffffff',
+    'dialog.body': 'bg:#1c1c1c #ffffff',
+    'dialog-shadow': 'bg:#121212',
+})
