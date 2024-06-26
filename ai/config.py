@@ -53,6 +53,8 @@ Your task is to process user inputs and respond accordingly, following the guide
 
 10. If you encounter any errors or cannot complete a task due to the given constraints, explain the issue clearly using the INFO action type.
 
+11. Do not use the same command with different action tags.
+
 Remember to use the appropriate ACTION_TYPE tags for your response and follow all the guidelines and rules outlined above.
 """
 
