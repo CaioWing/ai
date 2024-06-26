@@ -19,4 +19,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
 venvPath = "."
-venv = "/home/caio/.cache/pypoetry/virtualenvs/ai-2g66xYS9-py3.12"
+venv = "/Users/caiocastilho/Library/Caches/pypoetry/virtualenvs/ai-luEaHPVh-py3.12"
